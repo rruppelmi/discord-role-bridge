@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits } from "discord.js";
 import express from "express";
 import { REST, Routes } from "discord.js";
+import fs from "fs";
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
@@ -50,24 +51,22 @@ client.once("ready", async () => {
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-import fs from "fs";
+  if (interaction.commandName === "vehicle-access") {
+    const robloxUsername = interaction.options.getString("roblox_username");
+    const discordId = interaction.user.id;
 
-if (interaction.commandName === "vehicle-access") {
-  const robloxUsername = interaction.options.getString("roblox_username");
-  const discordId = interaction.user.id;
+    const data = fs.readFileSync("links.json");
+    const links = JSON.parse(data);
 
-  const data = fs.readFileSync("links.json");
-  const links = JSON.parse(data);
+    links[discordId] = robloxUsername;
 
-  links[discordId] = robloxUsername;
+    fs.writeFileSync("links.json", JSON.stringify(links, null, 2));
 
-  fs.writeFileSync("links.json", JSON.stringify(links, null, 2));
-
-  await interaction.reply({
-    content: `✅ your roblox username **${robloxUsername}** has been linked to your discord account.`,
-    ephemeral: true
-  });
-}
+    await interaction.reply({
+      content: `✅ your roblox username **${robloxUsername}** has been linked to your discord account.`,
+      ephemeral: true
+    });
+  }
 });
 
 app.get("/", (req, res) => {
