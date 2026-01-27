@@ -47,6 +47,19 @@ client.once("ready", async () => {
   }
 });
 
+client.on("interactionCreate", async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+
+  if (interaction.commandName === "vehicle-access") {
+    const robloxUsername = interaction.options.getString("roblox_username");
+
+    await interaction.reply({
+      content: `✅ your roblox username **${robloxUsername}** has been received.`,
+      ephemeral: true
+    });
+  }
+});
+
 app.get("/", (req, res) => {
   res.send("bot is online");
 });
