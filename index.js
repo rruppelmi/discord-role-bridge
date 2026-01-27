@@ -50,14 +50,24 @@ client.once("ready", async () => {
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  if (interaction.commandName === "vehicle-access") {
-    const robloxUsername = interaction.options.getString("roblox_username");
+import fs from "fs";
 
-    await interaction.reply({
-      content: `✅ your roblox username **${robloxUsername}** has been received.`,
-      ephemeral: true
-    });
-  }
+if (interaction.commandName === "vehicle-access") {
+  const robloxUsername = interaction.options.getString("roblox_username");
+  const discordId = interaction.user.id;
+
+  const data = fs.readFileSync("links.json");
+  const links = JSON.parse(data);
+
+  links[discordId] = robloxUsername;
+
+  fs.writeFileSync("links.json", JSON.stringify(links, null, 2));
+
+  await interaction.reply({
+    content: `✅ your roblox username **${robloxUsername}** has been linked to your discord account.`,
+    ephemeral: true
+  });
+}
 });
 
 app.get("/", (req, res) => {
