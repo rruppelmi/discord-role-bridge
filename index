@@ -1,0 +1,26 @@
+import express from "express";
+import { Client, GatewayIntentBits } from "discord.js";
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// environment variables (we set these later)
+const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+const GUILD_ID = process.env.GUILD_ID;
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers
+  ]
+});
+
+client.login(DISCORD_TOKEN);
+
+app.get("/", (req, res) => {
+  res.send("bot is online");
+});
+
+app.listen(PORT, () => {
+  console.log("server running");
+});
