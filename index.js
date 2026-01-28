@@ -1,96 +1,97 @@
-import { Client, GatewayIntentBits, REST, Routes } from "discord.js";
-import express from "express";
-import fs from "fs";
+const {
+  Client,
+  GatewayIntentBits,
+  REST,
+  Routes,
+  SlashCommandBuilder
+} = require("discord.js");
 
-// ---------- basic setup ----------
-const app = express();
-const PORT = process.env.PORT || 3000;
+const fs = require("fs");
+const path = require("path");
 
-const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
+// =======================
+// BASIC CONFIG
+// =======================
+const TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
 
-// ---------- discord client ----------
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
-  ]
-});
+const LINKS_FILE = path.join(__dirname, "links.json");
 
-// ---------- ensure links.json exists ----------
-if (!fs.existsSync("links.json")) {
-  fs.writeFileSync("links.json", "{}");
+// =======================
+// LOAD / SAVE LINKS
+// =======================
+function loadLinks() {
+  if (!fs.existsSync(LINKS_FILE)) return {};
+  return JSON.parse(fs.readFileSync(LINKS_FILE, "utf8"));
 }
 
-// ---------- slash command definition ----------
-const commands = [
-  {
-    name: "vehicle-access",
-    description: "link your roblox username for vehicle access",
-    options: [
-      {
-        name: "roblox_username",
-        description: "your roblox username",
-        type: 3,
-        required: true
-      }
-    ]
-  }
-];
+function saveLinks(data) {
+  fs.writeFileSync(LINKS_FILE, JSON.stringify(data, null, 2));
+}
 
-// ---------- register slash command ----------
-const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
+// =======================
+// CLIENT SETUP
+// =======================
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds]
+});
 
-client.once("ready", async () => {
+// =======================
+// SLASH COMMAND DEFINITION
+// =======================
+const vehicleCommand = new SlashCommandBuilder()
+  .setName("vehicle-access")
+  .setDescription("link your roblox username")
+  .addStringOption(option =>
+    option
+      .setName("username")
+      .setDescription("your roblox username")
+      .setRequired(true)
+  );
+
+// =======================
+// REGISTER COMMAND
+// =======================
+client.once("clientReady", async () => {
   console.log(`bot logged in as ${client.user.tag}`);
-  console.log("registering slash command");
+
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
 
   try {
     await rest.put(
       Routes.applicationGuildCommands(client.user.id, GUILD_ID),
-      { body: commands }
+      { body: [vehicleCommand.toJSON()] }
     );
-
     console.log("slash command registered");
-  } catch (err) {
-    console.error("command registration failed:", err);
+  } catch (error) {
+    console.error("failed to register slash command:", error);
   }
 });
 
-// ---------- handle command ----------
+// =======================
+// COMMAND HANDLER
+// =======================
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
+  if (interaction.commandName !== "vehicle-access") return;
 
-  if (interaction.commandName === "vehicle-access") {
-    const robloxUsername = interaction.options.getString("roblox_username");
-    const discordId = interaction.user.id;
+  console.log("interaction received from", interaction.user.id);
 
-    console.log("interaction received from", discordId);
+  const robloxUsername = interaction.options.getString("username");
 
-    const data = fs.readFileSync("links.json", "utf8");
-    const links = JSON.parse(data);
+  const links = loadLinks();
+  links[interaction.user.id] = robloxUsername;
+  saveLinks(links);
 
-    links[discordId] = robloxUsername;
+  console.log("current links:", links);
 
-    fs.writeFileSync("links.json", JSON.stringify(links, null, 2));
-
-    console.log("current links:", links);
-
-    await interaction.reply({
-      content: `✅ your roblox username **${robloxUsername}** has been linked.`,
-      ephemeral: true
-    });
-  }
+  await interaction.reply({
+    content: `✅ linked roblox username **${robloxUsername}**`,
+    ephemeral: true
+  });
 });
 
-// ---------- login ----------
-client.login(DISCORD_TOKEN);
-
-// ---------- web server (railway health check) ----------
-app.get("/", (req, res) => {
-  res.send("bot is online");
-});
-
-app.listen(PORT, () => {
-  console.log("server running");
-});
+// =======================
+// LOGIN
+// =======================
+client.login(TOKEN);
