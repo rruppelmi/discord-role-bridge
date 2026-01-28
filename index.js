@@ -1,97 +1,96 @@
-const {
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import {
   Client,
   GatewayIntentBits,
+  SlashCommandBuilder,
   REST,
-  Routes,
-  SlashCommandBuilder
-} = require("discord.js");
+  Routes
+} from "discord.js";
 
-const fs = require("fs");
-const path = require("path");
+// -------- path setup (esm safe) --------
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// =======================
-// BASIC CONFIG
-// =======================
+// -------- config --------
 const TOKEN = process.env.DISCORD_TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
 const GUILD_ID = process.env.GUILD_ID;
 
-const LINKS_FILE = path.join(__dirname, "links.json");
-
-// =======================
-// LOAD / SAVE LINKS
-// =======================
-function loadLinks() {
-  if (!fs.existsSync(LINKS_FILE)) return {};
-  return JSON.parse(fs.readFileSync(LINKS_FILE, "utf8"));
+if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
+  console.error("❌ missing env vars");
+  process.exit(1);
 }
 
-function saveLinks(data) {
-  fs.writeFileSync(LINKS_FILE, JSON.stringify(data, null, 2));
+// -------- data file --------
+const DATA_PATH = path.join(__dirname, "links.json");
+if (!fs.existsSync(DATA_PATH)) {
+  fs.writeFileSync(DATA_PATH, JSON.stringify({}, null, 2));
 }
 
-// =======================
-// CLIENT SETUP
-// =======================
+// -------- discord client --------
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-// =======================
-// SLASH COMMAND DEFINITION
-// =======================
-const vehicleCommand = new SlashCommandBuilder()
-  .setName("vehicle-access")
-  .setDescription("link your roblox username")
-  .addStringOption(option =>
-    option
-      .setName("username")
-      .setDescription("your roblox username")
-      .setRequired(true)
-  );
+// -------- slash command --------
+const commands = [
+  new SlashCommandBuilder()
+    .setName("vehicle-access")
+    .setDescription("link your discord to roblox")
+    .addStringOption(opt =>
+      opt
+        .setName("roblox_username")
+        .setDescription("your roblox username")
+        .setRequired(true)
+    )
+    .toJSON()
+];
 
-// =======================
-// REGISTER COMMAND
-// =======================
-client.once("clientReady", async () => {
-  console.log(`bot logged in as ${client.user.tag}`);
+// -------- register commands --------
+const rest = new REST({ version: "10" }).setToken(TOKEN);
 
-  const rest = new REST({ version: "10" }).setToken(TOKEN);
-
+(async () => {
   try {
+    console.log("⏳ registering slash commands...");
     await rest.put(
-      Routes.applicationGuildCommands(client.user.id, GUILD_ID),
-      { body: [vehicleCommand.toJSON()] }
+      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+      { body: commands }
     );
-    console.log("slash command registered");
-  } catch (error) {
-    console.error("failed to register slash command:", error);
+    console.log("✅ slash commands registered");
+  } catch (err) {
+    console.error("❌ command registration failed", err);
   }
+})();
+
+// -------- ready --------
+client.once("clientReady", () => {
+  console.log(`🤖 logged in as ${client.user.tag}`);
 });
 
-// =======================
-// COMMAND HANDLER
-// =======================
+// -------- interaction --------
 client.on("interactionCreate", async interaction => {
   if (!interaction.isChatInputCommand()) return;
   if (interaction.commandName !== "vehicle-access") return;
 
-  console.log("interaction received from", interaction.user.id);
+  console.log("📥 interaction received from", interaction.user.id);
 
-  const robloxUsername = interaction.options.getString("username");
+  const robloxName = interaction.options.getString("roblox_username");
+  const discordId = interaction.user.id;
 
-  const links = loadLinks();
-  links[interaction.user.id] = robloxUsername;
-  saveLinks(links);
+  const links = JSON.parse(fs.readFileSync(DATA_PATH, "utf8"));
+  links[discordId] = robloxName;
 
-  console.log("current links:", links);
+  fs.writeFileSync(DATA_PATH, JSON.stringify(links, null, 2));
+
+  console.log("🔗 updated links:", links);
 
   await interaction.reply({
-    content: `✅ linked roblox username **${robloxUsername}**`,
+    content: `✅ linked to roblox user **${robloxName}**`,
     ephemeral: true
   });
 });
 
-// =======================
-// LOGIN
-// =======================
+// -------- login --------
 client.login(TOKEN);
